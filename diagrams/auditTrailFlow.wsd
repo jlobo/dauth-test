@@ -1,0 +1,70 @@
+@startuml dAuthRegistrationAuthenticationAuthorizationFlow
+skinparam monochrome true
+
+title dAuth.me Registration, Authentication and Authorization
+
+actor vendor as "Vendor"
+participant dauth as "dAuth.me"
+database mongo as "MongoDb"
+
+note over dauth
+    adminKey = HMAC.gen()
+end note
+
+hnote over vendor
+    account = "MyUni"
+    prvKey = P256Key.Gen()
+    pubKey = prvKey.public
+end note
+
+vendor -> dauth: POST /vendor/ \n{account, pubKey}
+dauth -> mongo: db.vendor.insert(vendor)
+mongo --> dauth: **200** OK
+dauth --> vendor: **200** OK
+
+... Later ...
+
+hnote over vendor
+    sub = account
+    iat = Time.Now
+    exp = Time.Now.AddMinutes(1)
+    tokenPre = JWT.Sign({sub, iat, exp}, prvKey)
+end note
+
+vendor -> dauth: GET /vendor/token/ \nAuthorization: Bearer {$tokenPre}
+dauth -> mongo: db.vendor.find({account: account}, {pubKey})
+mongo --> dauth: **200** vendor
+
+hnote over dauth
+    isValid = JWT.Verify(tokenPre, pubKey)
+    isOnTime = tokenPre.iat >= Time.Now.AddMinutes(-1)
+      && tokenPre.iat <= Time.Now.AddMinutes(1)
+      && tokenPre.exp >= Time.Now.AddMinutes(-1)
+      && tokenPre.exp <= Time.Now.AddMinutes(1)
+end note
+
+alt isValid && isOnTime
+hnote over dauth
+    sub = account
+    iat = Time.Now
+    exp = Time.Now.AddMonths(1)
+    tokenPost = JWT.Sign({sub, iat, exp}, adminKey)
+end note
+  dauth --> vendor: **200** tokenPost
+else !isValid
+  dauth --> vendor: **400** Invalid token
+else !isOnTime
+  dauth --> vendor: **400** Invalid time
+end
+
+... Later ...
+
+vendor -> dauth: POST /metadata/ \nAuthorization: Bearer {$tokenPost} \n{id, userid}
+
+alt JWT.Verify(tokenPost, adminKey) && tokenPre.exp < Time.Now
+    dauth --> vendor: **200** OK
+else
+    dauth --> vendor: **401** Unauthorized
+end
+
+@enduml

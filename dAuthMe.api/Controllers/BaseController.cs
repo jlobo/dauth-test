@@ -1,6 +1,7 @@
 ﻿using System;
 using System.Collections.Generic;
 using System.Threading.Tasks;
+using dAuthMe.api.Tools;
 using Microsoft.AspNetCore.Mvc;
 using MongoDB.Bson;
 
@@ -13,24 +14,45 @@ namespace dAuthMe.api.Controllers
         public BaseController(IBaseRepository<TEntity> repo) => _repo = repo;
 
         [HttpGet("{id}")]
-        public async Task<ActionResult<TEntity>> Get([FromRoute] string id) {
+        public virtual async Task<ActionResult<TEntity>> Get([FromRoute] string id) {
             if (!ObjectId.TryParse(id, out var objid)) return BadRequest($"'{id}' is not a valid 24 digit hex string");
 
             return await _repo.Get(new ObjectId(id));
         }
 
         [HttpGet]
-        public async Task<List<TEntity>> Get() => await _repo.Get();
+        public virtual async Task<List<TEntity>> Get() => await _repo.Get();
 
         [HttpPost]
-        public async Task Create([FromBody] TEntity model) {
-            await _repo.Create(model);
+        public virtual async Task<ActionResult> Create([FromBody] TEntity model) {
+            try
+            {
+                await _repo.Create(model);
+            }
+            catch (CustomException e)
+            {
+                return BadRequest(e.Message); 
+            }
+
+            return Ok();
         }
 
         [HttpPut]
-        public async Task Update([FromBody] TEntity model) => await _repo.Update(model);
+        public virtual async Task<ActionResult> Update([FromBody] TEntity model) {
+            try
+            {
+                await _repo.Update(model);
+            }
+            catch (CustomException e)
+            {
+                
+                return BadRequest(e.Message); 
+            }
+
+            return Ok();
+        }
 
         [HttpDelete("{id}")]
-        public async Task Delete([FromRoute] string id) => await _repo.Delete(new ObjectId(id));
+        public virtual async Task Delete([FromRoute] string id) => await _repo.Delete(new ObjectId(id));
     }
 }

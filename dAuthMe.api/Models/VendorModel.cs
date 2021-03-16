@@ -14,7 +14,10 @@ namespace dAuthMe.api.Models
         [BsonRepresentation(BsonType.ObjectId)]
         public String ParentId { get; set; }
         public string Name { get; set; }
+        // TODO: Account must be unique 
+        public string Account { get; set; }
         public Uri CallbackUrl { get; set; }
+        public byte[] JwtPublicKey { get; set; }
         public byte[] JwtPrivateKey { get; set; }
         public byte[] TidePrivateKey { get; set; }
         public Uri Logo { get; set; }

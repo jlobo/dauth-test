@@ -26,17 +26,19 @@ namespace dAuthMe.api.Tools
         public static JwtToken FromECDsa(ECDsa key) =>
             new JwtToken(new ECDsaSecurityKey(key), KeyType.ECDsa);
 
-        public static JwtToken FromECDsa(byte[] key) =>
-            new JwtToken(new ECDsaSecurityKey(DeserializeEcdsa(key)), KeyType.ECDsa);
+        public static JwtToken FromECDsa(byte[] key, bool isPrivate) =>
+            new JwtToken(new ECDsaSecurityKey(DeserializeEcdsa(key, isPrivate)), KeyType.ECDsa);
 
-        public static JwtToken FromECDsa(string key) =>
-            new JwtToken(new ECDsaSecurityKey(DeserializeEcdsa(key)), KeyType.ECDsa);
+        public static JwtToken FromECDsa(string key, bool isPrivate) =>
+            new JwtToken(new ECDsaSecurityKey(DeserializeEcdsa(key, isPrivate)), KeyType.ECDsa);
 
         public static JwtToken FromHmac(byte[] key) =>
             new JwtToken(new SymmetricSecurityKey(key), KeyType.Hmac);
 
         public static JwtToken FromHmac(string key) =>
             new JwtToken(new SymmetricSecurityKey(Convert.FromBase64String(key)), KeyType.Hmac);
+
+        public JwtToken AddSubject(string subject) => AddClaims(new Claim("sub", subject));
 
         public JwtToken AddIssuer(string issuer) => AddClaims(new Claim("iss", issuer));
 
@@ -72,10 +74,10 @@ namespace dAuthMe.api.Tools
             return true;
         }
 
-        public string Generate() {
+        public string Generate(TimeSpan expires) {
             var descriptor = new SecurityTokenDescriptor {
                 Subject = new ClaimsIdentity(Claims),
-                Expires = DateTime.Now.AddDays(15),
+                Expires = DateTime.Now.Add(expires),
                 IssuedAt = DateTime.Now,
                 SigningCredentials = GetSignatureKey()
             };
@@ -95,11 +97,14 @@ namespace dAuthMe.api.Tools
             throw new NotImplementedException($"'{_type}' is not implemented");
         }
 
-        public static ECDsa DeserializeEcdsa(string key) => DeserializeEcdsa(Convert.FromBase64String(key));
+        public static ECDsa DeserializeEcdsa(string key, bool isPrivate) => DeserializeEcdsa(Convert.FromBase64String(key), isPrivate);
 
-        public static ECDsa DeserializeEcdsa(byte[] key) {
+        public static ECDsa DeserializeEcdsa(byte[] key, bool isPrivate) {
             var keyECDsa = ECDsa.Create("ECDsa");
-            keyECDsa.ImportECPrivateKey(key, out var length);
+            if (isPrivate)
+                keyECDsa.ImportECPrivateKey(key, out var length);
+            else
+                keyECDsa.ImportSubjectPublicKeyInfo(key, out var length);
 
             return keyECDsa;
         }

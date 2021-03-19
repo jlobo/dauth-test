@@ -33,6 +33,7 @@ namespace dAuthMe.api
 
             services.Configure<MongoSettings>(Configuration.GetSection("Mongo"));
             services.AddTransient(typeof(IBaseRepository<>), typeof(BaseRepository<>));
+            services.AddTransient<IUserRepository, UserRepository>();
             services.AddTransient<IRepoDBContext, RepoDBContext>();
             services.AddControllers();
             services.AddSwaggerGen(c =>

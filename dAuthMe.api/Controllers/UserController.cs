@@ -7,20 +7,36 @@ using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
-using MongoDB.Bson;
 namespace dAuthMe.api.Controllers
 {
     [ApiController]
     [Route("[controller]")]
-    public class VendorController : BaseController<VendorModel>
+    public class UserController : BaseController<UserModel>
     {
-        private readonly ILogger<VendorController> _logger;
+        private new readonly IUserRepository _repo;
         private readonly ApiSettings _config;
+        private readonly ILogger<UserController> _logger;
 
-        public VendorController(IBaseRepository<VendorModel> repo, IOptions<ApiSettings> config, ILogger<VendorController> logger) : base(repo, logger) {
-            _logger = logger;
+        public UserController(IUserRepository repo, IOptions<ApiSettings> config, ILogger<UserController> logger) : base(repo, logger) {
+            _repo = repo;
             _config = config.Value;
+            _logger = logger;
         }
+
+        public override Task<ActionResult<UserModel>> Create([FromBody] UserModel model)
+        {
+            if (model != null) {
+                model.Joined = DateTimeOffset.Now;
+                model.Modified = DateTimeOffset.Now;
+            }
+
+            _logger.LogInformation($"thi sis my joined {model.Joined}");
+            return base.Create(model);
+        }
+
+        //TODO: Add authorization
+        [Authorize]
+        public override Task<ActionResult<UserModel>> Update([FromBody] UserModel model) => base.Update(model);
 
         [AllowAnonymous]
         [HttpGet("token")]
@@ -32,7 +48,8 @@ namespace dAuthMe.api.Controllers
                 return BadRequest();
             }
 
-            if (!JwtToken.TryParse(authorization, out var jwt)) {
+            if (!JwtToken.TryParse(authorization, out var jwt))
+            {
                 _logger.LogInformation("Invalid token: Invalid token format");
                 return BadRequest();
             }
@@ -43,28 +60,31 @@ namespace dAuthMe.api.Controllers
                 return BadRequest();
             }
 
-            if (!ObjectId.TryParse(jwt.Payload.Sub, out var id)) {
+            if (!Guid.TryParse(jwt.Payload.Sub, out var username))
+            {
                 _logger.LogInformation("Invalid token: invalid sub");
                 return BadRequest("invalid token");
             }
 
-            var vendor = await _repo.Get(id);
+            var user = await _repo.Get(username);
             var delayCheck = Task.Delay(500);
-            if (vendor == null) {
-                _logger.LogInformation("Invalid authentication: vendor '{0}' not found", id);
+            if (user == null)
+            {
+                _logger.LogInformation("Invalid authentication: user '{0}' not found", username);
                 await delayCheck;
                 return Unauthorized("Account not found or invalid token");
             }
 
             //TODO: window token validation of time
-            if (!JwtToken.FromECDsa(vendor.JwtPublicKey, false).Verify(jwt.RawData)) {
-                _logger.LogInformation("Invalid authentication: invalid token for vendor '{0}", id);
+            if (!JwtToken.FromECDsa(user.GetPublicKey()).Verify(jwt.RawData))
+            {
+                _logger.LogInformation("Invalid authentication: invalid token for vendor '{0}", username);
                 await delayCheck;
                 return Unauthorized("Account not found or invalid token");
             }
-            
+
             var newToken = JwtToken.FromHmac(_config.SecretKey).AddAudience(jwt.Payload.Sub).Generate(TimeSpan.FromDays(365));
-            _logger.LogInformation("Valid authentication: for vendor '{0}", id);
+            _logger.LogInformation("Valid authentication: for vendor '{0}", username);
             await delayCheck;
             return Ok(newToken);
         }

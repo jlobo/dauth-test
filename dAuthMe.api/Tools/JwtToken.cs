@@ -3,12 +3,14 @@ using System.Collections.Generic;
 using System.IdentityModel.Tokens.Jwt;
 using System.Security.Claims;
 using System.Security.Cryptography;
+using System.Text.RegularExpressions;
 using Microsoft.IdentityModel.Tokens;
 
 namespace dAuthMe.api.Tools
 {
     public class JwtToken
     {
+        const string rex = "[Bb]earer\\s+([a-zA-Z0-9\\-_]+\\.[a-zA-Z0-9\\-_]+(?:\\.[a-zA-Z0-9\\-_]+)?)";
         private enum KeyType {ECDsa = 1, Hmac = 2};
 
         private readonly SecurityKey _key;
@@ -27,10 +29,10 @@ namespace dAuthMe.api.Tools
             new JwtToken(new ECDsaSecurityKey(key), KeyType.ECDsa);
 
         public static JwtToken FromECDsa(byte[] key, bool isPrivate) =>
-            new JwtToken(new ECDsaSecurityKey(DeserializeEcdsa(key, isPrivate)), KeyType.ECDsa);
+            new JwtToken(new ECDsaSecurityKey(ECDsaSerializer.GetEcdsa(key, isPrivate)), KeyType.ECDsa);
 
         public static JwtToken FromECDsa(string key, bool isPrivate) =>
-            new JwtToken(new ECDsaSecurityKey(DeserializeEcdsa(key, isPrivate)), KeyType.ECDsa);
+            new JwtToken(new ECDsaSecurityKey(ECDsaSerializer.GetEcdsa(key, isPrivate)), KeyType.ECDsa);
 
         public static JwtToken FromHmac(byte[] key) =>
             new JwtToken(new SymmetricSecurityKey(key), KeyType.Hmac);
@@ -97,20 +99,15 @@ namespace dAuthMe.api.Tools
             throw new NotImplementedException($"'{_type}' is not implemented");
         }
 
-        public static ECDsa DeserializeEcdsa(string key, bool isPrivate) => DeserializeEcdsa(Convert.FromBase64String(key), isPrivate);
+        public static bool TryParse(string token, out JwtSecurityToken sec) {
+            var match = Regex.Match(token, rex);
+            if (match.Groups.Count < 2) {
+                sec = null;
+                return false;
+            }
 
-        public static ECDsa DeserializeEcdsa(byte[] key, bool isPrivate) {
-            var keyECDsa = ECDsa.Create("ECDsa");
-            if (isPrivate)
-                keyECDsa.ImportECPrivateKey(key, out var length);
-            else
-                keyECDsa.ImportSubjectPublicKeyInfo(key, out var length);
-
-            return keyECDsa;
-        }
-
-        public static string SerializeEcdsa(ECDsa key) {
-            return Convert.ToBase64String(key.ExportECPrivateKey());
+            sec = new JwtSecurityToken(match.Groups[1].Value);
+            return true;
         }
     }
 }

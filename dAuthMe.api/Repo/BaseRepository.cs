@@ -59,6 +59,8 @@ namespace dAuthMe.api.Controllers
 
         public async Task Update(TEntity model)
         {
+            if (model == null) throw new CustomException(typeof(TEntity).Name + " object is null");
+
             await _collection.ReplaceOneAsync(Filter.Eq("_id", model.GetId()), model);
         }
 

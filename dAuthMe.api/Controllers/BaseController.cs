@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Threading.Tasks;
 using dAuthMe.api.Tools;
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.Extensions.Logging;
 using MongoDB.Bson;
 
 namespace dAuthMe.api.Controllers
@@ -10,8 +11,14 @@ namespace dAuthMe.api.Controllers
     public abstract class BaseController<TEntity> : ControllerBase where TEntity : IEntity
     {
         protected readonly IBaseRepository<TEntity> _repo;
+        private readonly ILogger _loger;
 
-        public BaseController(IBaseRepository<TEntity> repo) => _repo = repo;
+        private string _modelName => typeof(TEntity).Name;
+        
+        public BaseController(IBaseRepository<TEntity> repo, ILogger logger) {
+            _repo = repo;
+            _loger = logger;
+        }
 
         [HttpGet("{id}")]
         public virtual async Task<ActionResult<TEntity>> Get([FromRoute] string id) {
@@ -24,24 +31,32 @@ namespace dAuthMe.api.Controllers
         public virtual async Task<List<TEntity>> Get() => await _repo.Get();
 
         [HttpPost]
-        public virtual async Task<ActionResult> Create([FromBody] TEntity model) {
+        public virtual async Task<ActionResult<TEntity>> Create([FromBody] TEntity model) {
+            if (model == null)
+                return BadRequest($"{_modelName} is null");
+
             try
             {
                 await _repo.Create(model);
+                _loger.LogInformation($"{_modelName} with id {model.GetId()} was created");
             }
             catch (CustomException e)
             {
                 return BadRequest(e.Message); 
             }
 
-            return Ok();
+            return model;
         }
 
         [HttpPut]
-        public virtual async Task<ActionResult> Update([FromBody] TEntity model) {
+        public virtual async Task<ActionResult<TEntity>> Update([FromBody] TEntity model) {
+            if (model == null)
+                return BadRequest($"{_modelName} is null");
+
             try
             {
                 await _repo.Update(model);
+                _loger.LogInformation($"{_modelName} with id {model.GetId()} was updated");
             }
             catch (CustomException e)
             {
@@ -49,10 +64,14 @@ namespace dAuthMe.api.Controllers
                 return BadRequest(e.Message); 
             }
 
-            return Ok();
+            return model;
         }
 
         [HttpDelete("{id}")]
-        public virtual async Task Delete([FromRoute] string id) => await _repo.Delete(new ObjectId(id));
+        public virtual async Task Delete([FromRoute] string id) {
+            await _repo.Delete(new ObjectId(id));
+
+            _loger.LogInformation($"{_modelName} with id {id} was deleted");
+        }
     }
 }
